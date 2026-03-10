@@ -52,7 +52,7 @@ def check_file_signatures(data):
 # -----------------------------
 # MAIN UI
 # -----------------------------
-st.title("🔐 Universal Forensic Entropy Analyst")
+st.title("Universal Forensic Entropy Analyst")
 st.sidebar.header("Analysis Settings")
 file_mode = st.sidebar.radio("File Category:", ["Text/Document", "Image/Compressed"])
 
@@ -131,7 +131,7 @@ if uploaded_file:
     # -----------------------------
     # DOWNLOAD SECTION
     # -----------------------------
-    st.write("### 📥 Export Analysis Results")
+    st.write("###Export Analysis Results")
     dl_col1, dl_col2 = st.columns(2)
 
     # 1. CSV Report Download
@@ -146,7 +146,7 @@ if uploaded_file:
 
     with dl_col1:
         st.download_button(
-            label="📊 Download CSV Report",
+            label="Download CSV Report",
             data=csv_data,
             file_name=f"Forensic_Report_{uploaded_file.name}.csv",
             mime="text/csv"
@@ -156,8 +156,9 @@ if uploaded_file:
     with dl_col2:
         if plot_buffer.getbuffer().nbytes > 0:
             st.download_button(
-                label="🖼️ Download Visualization (PNG)",
+                label="Download Visualization (PNG)",
                 data=plot_buffer.getvalue(),
                 file_name=f"Forensic_Graph_{uploaded_file.name}.png",
                 mime="image/png"
             )
+
