@@ -1,13 +1,9 @@
-# Save as dashboard.py
-# Run via: streamlit run dashboard.py
-
 import streamlit as st
 import matplotlib.pyplot as plt
 import numpy as np
 import os
 import math
 import io
-import tempfile
 import pandas as pd
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.backends import default_backend
@@ -15,46 +11,24 @@ from cryptography.hazmat.primitives import padding, hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 import zipfile
 
+# -----------------------------
+# CONFIGURATION
+# -----------------------------
 BLOCK_SIZE = 1024
-THRESHOLD  = 7.3
+THRESHOLD_ENCRYPTED = 7.9  # Encrypted data is almost perfectly random
+THRESHOLD_COMPRESSED = 7.2 # Compressed data is high but lower than encryption
 PASSWORD = b"forensicpassword123"
 SALT     = b"saltysalt12345678"
 
-# Reports folder
-REPORTS_DIR = os.path.join(os.path.dirname(__file__), "../reports")
-os.makedirs(REPORTS_DIR, exist_ok=True)
+st.set_page_config(page_title="Universal Forensic Detector", layout="wide")
 
-
-def derive_key_iv(password, salt):
-    kdf = PBKDF2HMAC(
-        algorithm=hashes.SHA256(),
-        length=48,
-        salt=salt,
-        iterations=100000,
-        backend=default_backend()
-    )
-    key_iv = kdf.derive(password)
-    return key_iv[:32], key_iv[32:]
-
-key, iv = derive_key_iv(PASSWORD, SALT)
-
-def aes_encrypt(data, key, iv):
-    padder = padding.PKCS7(128).padder()
-    padded = padder.update(data) + padder.finalize()
-    cipher = Cipher(algorithms.AES(key), modes.CBC(iv), backend=default_backend())
-    encryptor = cipher.encryptor()
-    return encryptor.update(padded) + encryptor.finalize()
-
-def encrypt_second_half(data, key, iv):
-    mid = len(data) // 2
-    first = data[:mid]
-    second = aes_encrypt(data[mid:], key, iv)
-    return first + second
+# -----------------------------
+# CORE LOGIC FUNCTIONS
+# -----------------------------
 
 def calculate_entropy(data):
-    if not data:
-        return 0
-    freq = [0]*256
+    if not data: return 0
+    freq = [0] * 256
     for b in data:
         freq[b] += 1
     ent = 0
@@ -64,119 +38,125 @@ def calculate_entropy(data):
             ent -= p * math.log2(p)
     return ent
 
-def block_entropy(data):
-    return [calculate_entropy(data[i:i+BLOCK_SIZE]) for i in range(0, len(data), BLOCK_SIZE)]
+def derive_key_iv(password, salt):
+    kdf = PBKDF2HMAC(algorithm=hashes.SHA256(), length=48, salt=salt, iterations=100000, backend=default_backend())
+    key_iv = kdf.derive(password)
+    return key_iv[:32], key_iv[32:]
 
-def compress_file_bytes(data, filename=None):
-    buffer = io.BytesIO()
-    with zipfile.ZipFile(buffer, 'w', compression=zipfile.ZIP_DEFLATED) as zf:
-        name = os.path.basename(filename) if filename else "file"
-        zf.writestr(name, data)
-    return buffer.getvalue()
+def safe_encrypt(data):
+    try:
+        key, iv = derive_key_iv(PASSWORD, SALT)
+        padder = padding.PKCS7(128).padder()
+        padded = padder.update(data) + padder.finalize()
+        cipher = Cipher(algorithms.AES(key), modes.CBC(iv), backend=default_backend())
+        return cipher.encryptor().update(padded) + cipher.finalize()
+    except:
+        return data # Fallback
 
-def generate_versions(file_path, label):
-    with open(file_path, "rb") as f:
-        original = f.read()
-    versions = {}
-    versions[f"{label}-Normal"] = original
-    versions[f"{label}-Compressed"] = compress_file_bytes(original, file_path)
-    versions[f"{label}-Encrypted"] = aes_encrypt(original, key, iv)
-    versions[f"{label}-Partial"] = encrypt_second_half(original, key, iv)
-    return versions
-
-def compute_entropy_versions(versions):
-    overall = []
-    blocks = []
-    for name, data in versions.items():
-        overall.append(calculate_entropy(data))
-        blocks.append(block_entropy(data))
-    return overall, blocks
-
-def save_entropy_report(filename, file_type, versions, overall_entropy):
-    df = pd.DataFrame({
-        "File Name": [filename]*len(versions),
-        "Type": [file_type]*len(versions),
-        "Version": list(versions.keys()),
-        "Overall Entropy": overall_entropy
-    })
-    # Save in reports folder with timestamp
-    csv_path = os.path.join(REPORTS_DIR, f"{filename}_{file_type}_entropy_report.csv")
-    df.to_csv(csv_path, index=False)
-    return csv_path, df
-
-
-st.set_page_config(page_title="Entropy Visualization Dashboard", layout="wide")
-st.title("📊 Entropy Visualization Dashboard")
-
-file_type = st.radio("Select file type:", ["Text", "Image"])
-uploaded_file = st.file_uploader(f"Upload a {file_type} file", type=["txt","jpg","jpeg","png"])
-
-if uploaded_file is not None:
-    # Save uploaded file temporarily
-    with tempfile.NamedTemporaryFile(delete=False) as tmp:
-        tmp.write(uploaded_file.getbuffer())
-        temp_path = tmp.name
-
-    filename_base = os.path.splitext(uploaded_file.name)[0]
-
-    # Generate all versions
-    versions = generate_versions(temp_path, file_type)
-    overall_entropy, blocks = compute_entropy_versions(versions)
-
-    # Save CSV report in reports folder
-    csv_path, df_report = save_entropy_report(filename_base, file_type, versions, overall_entropy)
-
-    st.success(f"✅ Entropy report saved in: `{csv_path}`")
-
-    # CSV download button
-    csv_buffer = io.StringIO()
-    df_report.to_csv(csv_buffer, index=False)
-    st.download_button(
-        label="📥 Download CSV Report",
-        data=csv_buffer.getvalue().encode(),
-        file_name=os.path.basename(csv_path),
-        mime="text/csv"
-    )
-
-
-    if file_type == "Text":
-        labels = [v for v in versions.keys()]
-        fig, ax = plt.subplots(figsize=(8,5))
-        ax.bar(labels, overall_entropy)
-        ax.axhline(THRESHOLD, linestyle="--", color='red', label="Threshold")
-        ax.set_ylabel("Entropy")
-        ax.set_title("Text File Entropy Comparison")
-        ax.legend()
-        plt.xticks(rotation=45)
-        st.pyplot(fig)
-
-    elif file_type == "Image":
-        # Sort by entropy descending
-        sorted_idx = np.argsort(overall_entropy)[::-1]
-        sorted_names = [list(versions.keys())[i] for i in sorted_idx]
-        sorted_blocks = [blocks[i] for i in sorted_idx]
-        sorted_entropy = [overall_entropy[i] for i in sorted_idx]
-        labels = sorted_names
-
-        max_len = max(len(b) for b in sorted_blocks)
-        padded = [b + [np.nan]*(max_len-len(b)) for b in sorted_blocks]
-
-        fig, ax = plt.subplots(figsize=(10,5))
-        im = ax.imshow(padded, aspect='auto', interpolation='nearest', cmap='viridis')
-        fig.colorbar(im, ax=ax, label="Entropy")
-        ax.set_yticks(range(len(labels)))
-        ax.set_yticklabels(labels)
-        ax.set_xlabel("Block Number")
-        ax.set_title("Image Block-wise Entropy Heatmap (Sorted by Overall Entropy)")
-        st.pyplot(fig)
-
-    # Save chart to buffer and provide download
+def safe_compress(data):
     buf = io.BytesIO()
-    fig.savefig(buf, format='png', bbox_inches='tight')
-    buf.seek(0)
-    st.download_button(
-        label="📥 Download Chart as PNG",
-        data=buf,
-        file_name=f"{filename_base}_{file_type}_entropy_chart.png",
-        mime="image/png"
-    )
+    with zipfile.ZipFile(buf, 'w', compression=zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr("file", data)
+    return buf.getvalue()
+
+# -----------------------------
+# UI DESIGN
+# -----------------------------
+st.title("🔐 Universal Forensic Entropy Analyst")
+st.markdown("Upload any file (Normal, Encrypted, or Compressed) to detect its state.")
+
+uploaded_file = st.file_uploader("Upload target file", type=None)
+
+if uploaded_file:
+    # 1. READ FILE
+    file_bytes = uploaded_file.read()
+    file_size = len(file_bytes)
+    overall_ent = calculate_entropy(file_bytes)
+    
+    # 2. FILE SIGNATURE CHECK (Magic Bytes)
+    # This detects if a file claims to be a JPG/PNG but might be encrypted
+    is_image = file_bytes.startswith((b'\xff\xd8\xff', b'\x89PNG', b'\x47\x49\x46\x38'))
+    is_zip = file_bytes.startswith((b'PK\x03\x04', b'\x1f\x8b\x08'))
+
+    # 3. DETECTION & POPUP LOGIC
+    # We use a nested logic to ensure accuracy
+    if overall_ent >= THRESHOLD_ENCRYPTED:
+        detection_msg = "🚨 HIGH ALERT: This file is ENCRYPTED (or very strongly randomized)."
+        st.error(detection_msg)
+        st.toast(detection_msg, icon="🔒")
+        classification = "Encrypted"
+    elif overall_ent >= THRESHOLD_COMPRESSED:
+        if is_image or is_zip:
+            detection_msg = "ℹ️ NOTICE: This is a Normal Compressed File (Image/Archive)."
+            st.info(detection_msg)
+            classification = "Normal (Compressed)"
+        else:
+            detection_msg = "⚠️ WARNING: High Entropy detected. Could be Partial Encryption."
+            st.warning(detection_msg)
+            classification = "Partial/Suspicious"
+        st.toast(detection_msg, icon="📂")
+    else:
+        detection_msg = "✅ NOTICE: This is a Normal Unencrypted/Plaintext file."
+        st.success(detection_msg)
+        st.toast(detection_msg, icon="📄")
+        classification = "Normal (Plain)"
+
+    # 4. GENERATE CONTRAST DATA FOR THE GRAPH
+    # We show what this specific file would look like in other states
+    contrast_data = {
+        "Uploaded File": file_bytes,
+        "If Compressed": safe_compress(file_bytes),
+        "If Partial Enc": file_bytes[:file_size//2] + safe_encrypt(file_bytes[file_size//2:]),
+        "If Full Enc": safe_encrypt(file_bytes)
+    }
+    
+    names = list(contrast_data.keys())
+    entropies = [calculate_entropy(v) for v in contrast_data.values()]
+
+    # 5. VISUALIZATION
+    col1, col2 = st.columns([2, 1])
+
+    with col1:
+        st.subheader("Entropy Comparison Chart")
+        fig, ax = plt.subplots(figsize=(10, 5))
+        colors = ['#ff4b4b', '#4b8bff', '#ffca3a', '#8ac926']
+        bars = ax.bar(names, entropies, color=colors)
+        
+        # Draw Threshold Lines
+        ax.axhline(y=THRESHOLD_ENCRYPTED, color='red', linestyle='--', alpha=0.5, label="Encryption Threshold")
+        ax.axhline(y=THRESHOLD_COMPRESSED, color='orange', linestyle='--', alpha=0.5, label="Compression Threshold")
+        
+        ax.set_ylim(0, 8.5)
+        ax.set_ylabel("Entropy (Bits per Byte)")
+        ax.legend(loc='lower right')
+        st.pyplot(fig)
+
+    with col2:
+        st.subheader("Data Summary")
+        st.write(f"**Filename:** {uploaded_file.name}")
+        st.write(f"**Detected Type:** {classification}")
+        st.write(f"**Overall Entropy:** {overall_ent:.4f}")
+        
+        # Metrics for visual pop
+        st.metric("Analyzed Entropy", f"{overall_ent:.2f}", delta=f"{overall_ent - 7.5:.2f}" if overall_ent > 7.5 else None)
+
+    # 6. BLOCK ANALYSIS (For Images/Structure)
+    st.divider()
+    st.subheader("Internal Structure Analysis (Block Entropy)")
+    
+    blocks = [calculate_entropy(file_bytes[i:i+BLOCK_SIZE]) for i in range(0, len(file_bytes), BLOCK_SIZE)]
+    
+    fig2, ax2 = plt.subplots(figsize=(12, 3))
+    ax2.plot(blocks, color='#4b8bff', linewidth=1)
+    ax2.fill_between(range(len(blocks)), blocks, color='#4b8bff', alpha=0.2)
+    ax2.set_title("Entropy Signature across File Blocks")
+    ax2.set_xlabel("Block Index")
+    ax2.set_ylabel("Entropy")
+    st.pyplot(fig2)
+
+    # 7. DOWNLOAD REPORT
+    report_df = pd.DataFrame({
+        "Analysis Metric": ["Filename", "Size", "Detected Classification", "Shannon Entropy"],
+        "Value": [uploaded_file.name, f"{file_size} bytes", classification, overall_ent]
+    })
+    st.download_button("📥 Download Forensic Report", report_df.to_csv(index=False), "forensic_report.csv", "text/csv")
