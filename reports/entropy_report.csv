@@ -1,0 +1,5 @@
+File,File Type,Overall Entropy,Max Block Entropy,Suspicious
+partial_secret.bin,Unknown,6.7,6.7,No
+secret.enc,Unknown,7.46,7.46,Yes
+secret.txt,Unknown,4.27,4.27,No
+secret.zip,MS Office newer,6.84,6.84,No
