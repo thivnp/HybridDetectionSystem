@@ -131,7 +131,7 @@ if uploaded_file:
     # -----------------------------
     # DOWNLOAD SECTION
     # -----------------------------
-    st.write("###Export Analysis Results")
+    st.write("Export Analysis Results")
     dl_col1, dl_col2 = st.columns(2)
 
     # 1. CSV Report Download
@@ -161,4 +161,5 @@ if uploaded_file:
                 file_name=f"Forensic_Graph_{uploaded_file.name}.png",
                 mime="image/png"
             )
+
 
