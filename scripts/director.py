@@ -3,6 +3,34 @@ import pandas as pd
 import os
 import math
 
+# ---------------- LOGIN SYSTEM ----------------
+
+def login():
+
+    st.title("🔐 Admin Login")
+
+    username = st.text_input("Username")
+    password = st.text_input("Password", type="password")
+
+    if st.button("Login"):
+
+        if username == "admin" and password == "1234":
+            st.session_state["logged_in"] = True
+            st.success("Login Successful ✅")
+            st.rerun()
+        else:
+            st.error("Invalid Username or Password ❌")
+
+
+# Initialize session
+if "logged_in" not in st.session_state:
+    st.session_state["logged_in"] = False
+
+# Block app if not logged in
+if not st.session_state["logged_in"]:
+    login()
+    st.stop()
+
 # ---------------- DETECTION FUNCTIONS ----------------
 
 def calculate_entropy(data):
@@ -46,6 +74,11 @@ st.set_page_config(
 # ---------------- SIDEBAR ----------------
 
 st.sidebar.title("Hybrid Detection System")
+
+# Logout button
+if st.sidebar.button("Logout"):
+    st.session_state["logged_in"] = False
+    st.rerun()
 
 page = st.sidebar.selectbox(
     "Navigation",
@@ -161,7 +194,5 @@ elif page == "About":
     st.header("About")
 
     st.write("""
-    Hybrid Detection System for identifying encrypted and compressed files.
-
-    The system uses entropy-based hybrid analysis to classify files.
+    The Hybrid Detection System is a digital forensic tool designed to accurately identify normal, compressed, encrypted, and partially encrypted data using a combination of entropy analysis, file structure validation, and byte-pattern examination. Unlike traditional entropy-only methods, this system integrates multiple analytical techniques to reduce false positives and improve detection reliability, especially in cases where compressed data mimics encrypted characteristics or when only portions of a file are encrypted. The system follows a structured process where uploaded files are first preprocessed, then analyzed using entropy calculations, followed by classification logic to determine the data type. The results are presented through interactive visualizations and stored for further analysis. This system is beneficial for digital forensic investigators, cybersecurity analysts, law enforcement agencies, and researchers, as it enhances their ability to detect hidden or suspicious data. Key benefits include improved accuracy, reduced misclassification, and user-friendly reporting for forensic investigations.
     """)
