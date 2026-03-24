@@ -34,6 +34,9 @@ def calculate_entropy(data):
     entropy = 0
     length = len(data)
 
+    if length == 0:
+        return 0
+
     for x in range(256):
         p_x = data.count(x) / length
         if p_x > 0:
@@ -73,33 +76,37 @@ def analyze_file(filepath):
 
     entropy = calculate_entropy(data)
     blocks = block_entropy(data)
+
     block_var = max(blocks) - min(blocks) if blocks else 0
     header_valid = check_file_signature(data, filepath)
 
     ext = os.path.splitext(filepath)[1].lower()
 
-    # -------- HYBRID LOGIC --------
-
+    # -------- IMAGE LOGIC (FIXED) --------
     if ext in [".jpg", ".jpeg", ".png"]:
 
         if not header_valid:
             file_type = "Partially Encrypted Image"
 
-        elif entropy > 7.8 and block_var < 0.3:
-            file_type = "Compressed Image"
-
-        elif entropy > 7.5 and block_var >= 0.3:
+        elif block_var > 1.5:
             file_type = "Partially Encrypted Image"
 
-        elif entropy > 7.2:
-            file_type = "Normal Image"
+        elif entropy > 7.9:
+            file_type = "Encrypted Image"
+
+        elif entropy > 7.5:
+            file_type = "Compressed Image"
 
         else:
-            file_type = "Suspicious Image"
+            file_type = "Normal Image"
 
+    # -------- TEXT / OTHER --------
     else:
 
-        if entropy > 7.5 and block_var < 0.2:
+        if block_var > 2:
+            file_type = "Partially Encrypted"
+
+        elif entropy > 7.5:
             file_type = "Encrypted"
 
         elif entropy > 6:
@@ -108,7 +115,7 @@ def analyze_file(filepath):
         else:
             file_type = "Normal"
 
-    return entropy, file_type, block_var, header_valid
+    return entropy, file_type, block_var, header_valid, blocks
 
 # ---------------- STREAMLIT CONFIG ----------------
 
@@ -135,7 +142,7 @@ page = st.sidebar.selectbox(
 
 if page == "Dashboard":
 
-    st.title("Hybrid Encryption & Compression Detection System")
+    st.title("Hybrid Detection System")
 
     history_file = "scan_history.csv"
 
@@ -150,9 +157,9 @@ if page == "Dashboard":
 
     col1, col2, col3 = st.columns(3)
 
-    col1.metric("Encrypted Files", encrypted)
-    col2.metric("Compressed Files", compressed)
-    col3.metric("Normal Files", normal)
+    col1.metric("Encrypted", encrypted)
+    col2.metric("Compressed", compressed)
+    col3.metric("Normal", normal)
 
     chart_data = pd.DataFrame({
         "Type": ["Encrypted", "Compressed", "Normal"],
@@ -176,7 +183,7 @@ elif page == "File Detection":
 
         if st.button("Run Detection"):
 
-            entropy, file_type, block_var, header_valid = analyze_file(uploaded_file.name)
+            entropy, file_type, block_var, header_valid, blocks = analyze_file(uploaded_file.name)
 
             col1, col2, col3, col4 = st.columns(4)
 
@@ -185,6 +192,30 @@ elif page == "File Detection":
             col3.metric("Block Variation", round(block_var, 3))
             col4.metric("Header Valid", header_valid)
 
+            # -------- HEATMAP FOR IMAGES --------
+            ext = os.path.splitext(uploaded_file.name)[1].lower()
+
+            if ext in [".jpg", ".jpeg", ".png"]:
+
+                st.subheader("Block-wise Entropy Heatmap")
+
+                if blocks:
+
+                    fig, ax = plt.subplots(figsize=(10, 4))
+
+                    data_array = np.array(blocks).reshape(1, -1)
+
+                    im = ax.imshow(data_array, aspect='auto')
+
+                    plt.colorbar(im, ax=ax, label="Entropy")
+
+                    ax.set_xlabel("Block Number")
+                    ax.set_ylabel("Entropy Distribution")
+                    ax.set_title("Image Block-wise Entropy")
+
+                    st.pyplot(fig)
+
+            # -------- SAVE HISTORY --------
             history = pd.DataFrame({
                 "File": [uploaded_file.name],
                 "Entropy": [entropy],
@@ -214,55 +245,6 @@ elif page == "Analytics":
         st.subheader("File Type Distribution")
         st.bar_chart(data["Type"].value_counts())
 
-        # -------- HEATMAP FOR IMAGES --------
-        st.subheader("Image Entropy Heatmap (Block-wise Analysis)")
-
-        image_files = data[data["File"].str.lower().str.endswith((".jpg", ".jpeg", ".png"))]
-
-        if len(image_files) > 0:
-
-            heatmap_data = []
-            labels = []
-
-            for file in image_files["File"]:
-                try:
-                    with open(file, "rb") as f:
-                        raw = list(f.read())
-
-                    blocks = block_entropy(raw)
-
-                    heatmap_data.append(blocks)
-                    labels.append(file)
-
-                except:
-                    continue
-
-            if heatmap_data:
-
-                max_len = max(len(row) for row in heatmap_data)
-                padded = [row + [np.nan]*(max_len - len(row)) for row in heatmap_data]
-
-                fig, ax = plt.subplots(figsize=(10, 5))
-
-                im = ax.imshow(padded, aspect='auto')
-
-                plt.colorbar(im, ax=ax, label="Entropy")
-
-                ax.set_yticks(range(len(labels)))
-                ax.set_yticklabels(labels)
-
-                ax.set_xlabel("Block Number")
-                ax.set_ylabel("Image Files")
-                ax.set_title("Block-wise Entropy Heatmap for Image Files")
-
-                st.pyplot(fig)
-
-            else:
-                st.info("No valid image data")
-
-        else:
-            st.info("No image files found")
-
     else:
         st.info("No data available")
 
@@ -285,5 +267,5 @@ elif page == "About":
     st.header("About")
 
     st.write("""
-    The Hybrid Detection System is a digital forensic tool designed to accurately identify normal, compressed, encrypted, and partially encrypted data using a combination of entropy analysis, file signature verification, and block-wise entropy analysis. This hybrid approach significantly reduces false positives and improves detection accuracy. The system analyzes uploaded files, validates structural integrity, and visualizes results using charts and heatmaps. It is particularly useful for digital forensic investigators, cybersecurity professionals, and researchers for identifying hidden or suspicious data efficiently.
+    The Hybrid Detection System is a digital forensic tool designed to accurately identify normal, compressed, encrypted, and partially encrypted data using entropy analysis, file signature verification, and block-wise entropy analysis. This hybrid approach significantly reduces false positives and improves detection reliability. The system visualizes results using charts and heatmaps, helping investigators easily identify suspicious patterns. It is useful for forensic analysts, cybersecurity professionals, and researchers for detecting hidden or encrypted data efficiently.
     """)
