@@ -303,13 +303,5 @@ elif page == "About":
     st.header("About")
 
     st.write("""
-    The Hybrid Detection System is a digital forensic tool designed to accurately identify normal, compressed, encrypted, and partially encrypted data using a hybrid approach.
-
-    The system combines entropy analysis, file signature verification, and block-wise entropy analysis to improve detection accuracy and reduce false positives.
-
-    The process includes file upload, preprocessing, entropy computation, structural validation, hybrid classification, and visualization.
-
-    Heatmaps are used for image analysis, while statistical outputs are used for text-based files.
-
-    This system is beneficial for digital forensic investigators, cybersecurity analysts, and law enforcement agencies.
+    The Hybrid Detection System is a digital forensic tool designed to accurately identify and classify different types of data, including normal, compressed, encrypted, and partially encrypted files. It employs a hybrid approach that integrates entropy analysis, file signature verification, and block-wise entropy analysis to enhance detection accuracy while minimizing false positives. The system follows a structured workflow that begins with file upload and preprocessing, followed by entropy computation and structural validation. These results are then processed through a hybrid classification mechanism to determine the nature of the data. To support better understanding and interpretation, the system presents its findings through visualizations—using heatmaps for image-based analysis and statistical outputs for text-based data. Overall, this system is intended to assist digital forensic investigators, cybersecurity analysts, and law enforcement agencies in efficiently analyzing and classifying data during forensic investigations.
     """)
