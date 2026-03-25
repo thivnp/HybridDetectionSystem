@@ -285,7 +285,7 @@ elif page == "History":
 
         # Download
         csv_download = data.to_csv(index=False).encode()
-        st.download_button("📥 Download Full History", csv_download, "history.csv", "text/csv")
+        st.download_button("Download Full History", csv_download, "history.csv", "text/csv")
 
         # Clear history
         if st.button("Clear History"):
