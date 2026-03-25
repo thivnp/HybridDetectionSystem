@@ -121,24 +121,57 @@ def analyze_file(filepath):
 
     return entropy, file_type, block_var, header_valid, blocks, confidence
 
-# ---------------- STREAMLIT ----------------
+# ---------------- STREAMLIT CONFIG ----------------
 
 st.set_page_config(page_title="Hybrid Detection System", layout="wide")
 
 st.sidebar.title("Hybrid Detection System")
 
+# Logout
 if st.sidebar.button("Logout"):
     st.session_state["logged_in"] = False
     st.rerun()
 
-page = st.sidebar.selectbox("Navigation",
-["Dashboard","File Detection","Analytics","History","About"])
+page = st.sidebar.selectbox(
+    "Navigation",
+    ["Dashboard","File Detection","Analytics","History","About"]
+)
 
 history_file = "scan_history.csv"
 
+# ---------------- DASHBOARD ----------------
+
+if page == "Dashboard":
+
+    st.title("Hybrid Detection Dashboard")
+
+    data = safe_read_csv(history_file)
+
+    if not data.empty:
+
+        encrypted = len(data[data["Type"].str.contains("Encrypted", na=False)])
+        compressed = len(data[data["Type"].str.contains("Compressed", na=False)])
+        normal = len(data[data["Type"].str.contains("Normal", na=False)])
+
+    else:
+        encrypted = compressed = normal = 0
+
+    col1,col2,col3 = st.columns(3)
+
+    col1.metric("Encrypted Files", encrypted)
+    col2.metric("Compressed Files", compressed)
+    col3.metric("Normal Files", normal)
+
+    chart_data = pd.DataFrame({
+        "Type":["Encrypted","Compressed","Normal"],
+        "Count":[encrypted,compressed,normal]
+    })
+
+    st.bar_chart(chart_data.set_index("Type"))
+
 # ---------------- FILE DETECTION ----------------
 
-if page == "File Detection":
+elif page == "File Detection":
 
     st.header("Upload File")
 
@@ -155,13 +188,13 @@ if page == "File Detection":
 
             col1,col2,col3,col4,col5 = st.columns(5)
 
-            col1.metric("Entropy",round(entropy,3))
-            col2.metric("Type",file_type)
-            col3.metric("Block Var",round(block_var,3))
-            col4.metric("Header",header_valid)
-            col5.metric("Confidence %",confidence)
+            col1.metric("Entropy", round(entropy,3))
+            col2.metric("Type", file_type)
+            col3.metric("Block Var", round(block_var,3))
+            col4.metric("Header", header_valid)
+            col5.metric("Confidence %", confidence)
 
-            # WARNING SYSTEM
+            # Warning system
             if "Encrypted" in file_type:
                 st.error("⚠️ High Risk File")
             elif "Partial" in file_type:
@@ -169,19 +202,19 @@ if page == "File Detection":
             else:
                 st.success("✅ Safe File")
 
-            # HEATMAP FOR IMAGES
+            # Heatmap for images
             ext = os.path.splitext(uploaded_file.name)[1].lower()
 
             if ext in [".jpg",".jpeg",".png"]:
 
                 st.subheader("Block Entropy Heatmap")
 
-                fig,ax = plt.subplots(figsize=(10,3))
+                fig, ax = plt.subplots(figsize=(10,3))
 
                 heat = np.array(blocks).reshape(1,-1)
+                im = ax.imshow(heat, aspect='auto')
 
-                im = ax.imshow(heat,aspect='auto')
-                plt.colorbar(im,ax=ax,label="Entropy")
+                plt.colorbar(im, ax=ax, label="Entropy")
 
                 ax.set_xlabel("Block Index")
                 ax.set_ylabel("Entropy Distribution")
@@ -189,20 +222,79 @@ if page == "File Detection":
 
                 st.pyplot(fig)
 
-            # SAVE HISTORY
+            # Save history
             df = pd.DataFrame([{
-                "File":uploaded_file.name,
-                "Entropy":entropy,
-                "BlockVar":block_var,
-                "Header":header_valid,
-                "Type":file_type,
-                "Confidence":confidence,
-                "Timestamp":datetime.now()
+                "File": uploaded_file.name,
+                "Entropy": entropy,
+                "BlockVar": block_var,
+                "Header": header_valid,
+                "Type": file_type,
+                "Confidence": confidence,
+                "Timestamp": datetime.now()
             }])
 
-            df.to_csv(history_file,mode="a",
-                      header=not os.path.exists(history_file),
-                      index=False, quoting=csv.QUOTE_MINIMAL)
+            df.to_csv(
+                history_file,
+                mode="a",
+                header=not os.path.exists(history_file),
+                index=False,
+                quoting=csv.QUOTE_MINIMAL
+            )
+
+# ---------------- ANALYTICS ----------------
+
+elif page == "Analytics":
+
+    st.header("System Analytics")
+
+    data = safe_read_csv(history_file)
+
+    if not data.empty:
+
+        st.subheader("Entropy Trend")
+        st.line_chart(data["Entropy"])
+
+        st.subheader("File Type Distribution")
+        st.bar_chart(data["Type"].value_counts())
+
+    else:
+        st.info("No data available")
+
+# ---------------- HISTORY ----------------
+
+elif page == "History":
+
+    st.header("Detection History")
+
+    data = safe_read_csv(history_file)
+
+    if not data.empty:
+
+        st.write(f"Total Records: {len(data)}")
+
+        # Pagination
+        rows_per_page = 10
+        total_pages = max(1, len(data)//rows_per_page + 1)
+
+        page_num = st.number_input("Page", min_value=1, max_value=total_pages, step=1)
+
+        start = (page_num - 1) * rows_per_page
+        end = start + rows_per_page
+
+        st.dataframe(data.iloc[start:end], use_container_width=True)
+
+        # Download
+        csv_download = data.to_csv(index=False).encode()
+        st.download_button("📥 Download Full History", csv_download, "history.csv", "text/csv")
+
+        # Clear history
+        if st.button("Clear History"):
+            os.remove(history_file)
+            st.success("History Cleared")
+            st.rerun()
+
+    else:
+        st.info("No scans performed yet")
 
 # ---------------- ABOUT ----------------
 
@@ -211,9 +303,13 @@ elif page == "About":
     st.header("About")
 
     st.write("""
-    The Hybrid Detection System is a digital forensic tool designed to accurately identify normal, compressed, encrypted, and partially encrypted data using a combination of entropy analysis, file signature verification, and block-wise entropy analysis. This hybrid approach significantly reduces false positives and improves detection reliability.
+    The Hybrid Detection System is a digital forensic tool designed to accurately identify normal, compressed, encrypted, and partially encrypted data using a hybrid approach.
 
-    The system processes uploaded files, computes entropy metrics, evaluates structural integrity, and visualizes results through charts and heatmaps. It is particularly useful for digital forensic investigators, cybersecurity analysts, and researchers in detecting hidden or suspicious data.
+    The system combines entropy analysis, file signature verification, and block-wise entropy analysis to improve detection accuracy and reduce false positives.
 
-    Key benefits include improved classification accuracy, support for partial encryption detection, reduced misclassification, and user-friendly visualization for decision-making.
+    The process includes file upload, preprocessing, entropy computation, structural validation, hybrid classification, and visualization.
+
+    Heatmaps are used for image analysis, while statistical outputs are used for text-based files.
+
+    This system is beneficial for digital forensic investigators, cybersecurity analysts, and law enforcement agencies.
     """)
