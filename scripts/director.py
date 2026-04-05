@@ -96,7 +96,7 @@ def analyze_file(filepath):
         elif entropy > 7.96:
             file_type = "Encrypted Image"
 
-        elif entropy > 7.5:
+        elif entropy > 7.6:
             file_type = "Compressed Image"
 
         else:
