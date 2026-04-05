@@ -93,10 +93,10 @@ def analyze_file(filepath):
         elif block_var > 1.5:
             file_type = "Partially Encrypted Image"
 
-        elif entropy > 7.96:
+        elif entropy > 7.966:
             file_type = "Encrypted Image"
 
-        elif entropy > 7.6:
+        elif entropy > 7.956:
             file_type = "Compressed Image"
 
         else:
