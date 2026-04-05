@@ -90,7 +90,7 @@ def analyze_file(filepath):
         if not header_valid:
             file_type = "Partially Encrypted Image"
 
-        elif block_var > 1.5:
+        elif block_var > 0.15:
             file_type = "Partially Encrypted Image"
 
         elif entropy > 7.992:
