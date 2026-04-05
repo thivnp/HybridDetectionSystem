@@ -108,7 +108,7 @@ def analyze_file(filepath):
         if block_var > 2:
             file_type = "Partially Encrypted"
 
-        elif entropy > 7.5:
+        elif entropy > 7.4:
             file_type = "Encrypted"
 
         elif entropy > 6:
